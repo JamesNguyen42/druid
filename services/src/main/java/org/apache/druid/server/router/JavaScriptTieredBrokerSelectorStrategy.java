@@ -37,8 +37,8 @@ public class JavaScriptTieredBrokerSelectorStrategy implements TieredBrokerSelec
 
   private final String function;
 
-  // This variable is lazily initialized to avoid unnecessary JavaScript compilation during JSON serde
-  private SelectorFunction fnSelector;
+  // Lazily compile one selector per thread because GraalJS contexts cannot be entered concurrently by multiple threads.
+  private final ThreadLocal<SelectorFunction> fnSelector;
 
   @JsonCreator
   public JavaScriptTieredBrokerSelectorStrategy(
@@ -50,13 +50,15 @@ public class JavaScriptTieredBrokerSelectorStrategy implements TieredBrokerSelec
     Preconditions.checkState(config.isEnabled(), "JavaScript is disabled");
 
     this.function = fn;
+    this.fnSelector = ThreadLocal.withInitial(
+        () -> JavaScriptUtil.compileSelectorFunction(SelectorFunction.class, function)
+    );
   }
 
   @Override
   public Optional<String> getBrokerServiceName(TieredBrokerConfig config, Query query)
   {
-    fnSelector = fnSelector == null ? JavaScriptUtil.compileSelectorFunction(SelectorFunction.class, function) : fnSelector;
-    return Optional.fromNullable(fnSelector.apply(config, query));
+    return Optional.fromNullable(fnSelector.get().apply(config, query));
   }
 
   @JsonProperty

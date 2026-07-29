@@ -25,7 +25,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Optional;
 import org.apache.druid.jackson.DefaultObjectMapper;
 import org.apache.druid.js.JavaScriptConfig;
+import org.apache.druid.java.util.common.concurrent.Execs;
 import org.apache.druid.query.Druids;
+import org.apache.druid.query.Query;
 import org.apache.druid.query.aggregation.CountAggregatorFactory;
 import org.apache.druid.query.aggregation.DoubleSumAggregatorFactory;
 import org.apache.druid.query.aggregation.LongSumAggregatorFactory;
@@ -37,6 +39,10 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
 import java.util.LinkedHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 public class JavaScriptTieredBrokerSelectorStrategyTest
 {
@@ -160,5 +166,67 @@ public class JavaScriptTieredBrokerSelectorStrategyTest
         )
     );
 
+  }
+
+  @Test
+  public void testGetBrokerServiceNameFromMultipleThreads() throws Exception
+  {
+    final TieredBrokerSelectorStrategy strategy = new JavaScriptTieredBrokerSelectorStrategy(
+        "function (config, query) { return config.getDefaultBrokerServiceName() }",
+        JavaScriptConfig.getEnabledInstance()
+    );
+    final BlockingTieredBrokerConfig tieredBrokerConfig = new BlockingTieredBrokerConfig();
+    final Query<?> query = Druids.newTimeBoundaryQueryBuilder().dataSource("test").bound("maxTime").build();
+    final ExecutorService firstExecutor = Execs.singleThreaded("js-selector-test-first-%d");
+    final ExecutorService secondExecutor = Execs.singleThreaded("js-selector-test-second-%d");
+
+    try {
+      final Future<Optional<String>> firstResult = firstExecutor.submit(
+          () -> strategy.getBrokerServiceName(tieredBrokerConfig, query)
+      );
+      Assert.assertTrue(tieredBrokerConfig.firstInvocation.await(5, TimeUnit.SECONDS));
+
+      final Future<Optional<String>> secondResult = secondExecutor.submit(
+          () -> strategy.getBrokerServiceName(tieredBrokerConfig, query)
+      );
+      Assert.assertTrue(tieredBrokerConfig.invocations.await(5, TimeUnit.SECONDS));
+      tieredBrokerConfig.release.countDown();
+
+      Assert.assertEquals(
+          Optional.of("druid/broker"),
+          firstResult.get()
+      );
+      Assert.assertEquals(
+          Optional.of("druid/broker"),
+          secondResult.get()
+      );
+    }
+    finally {
+      tieredBrokerConfig.release.countDown();
+      firstExecutor.shutdownNow();
+      secondExecutor.shutdownNow();
+    }
+  }
+
+  public static class BlockingTieredBrokerConfig extends TieredBrokerConfig
+  {
+    private final CountDownLatch firstInvocation = new CountDownLatch(1);
+    private final CountDownLatch invocations = new CountDownLatch(2);
+    private final CountDownLatch release = new CountDownLatch(1);
+
+    @Override
+    public String getDefaultBrokerServiceName()
+    {
+      firstInvocation.countDown();
+      invocations.countDown();
+      try {
+        release.await();
+      }
+      catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new RuntimeException(e);
+      }
+      return super.getDefaultBrokerServiceName();
+    }
   }
 }
