@@ -49,6 +49,8 @@ public class UnnestSegment extends WrappedSegment
       return (T) new UnnestCursorFactory(delegate.as(CursorFactory.class), unnestColumn, filter);
     } else if (TopNOptimizationInspector.class.equals(clazz)) {
       return (T) new SimpleTopNOptimizationInspector(filter == null);
+    } else if (TimeBoundaryInspector.class.equals(clazz)) {
+      return (T) WrappedTimeBoundaryInspector.create(delegate.as(TimeBoundaryInspector.class));
     }
     return null;
   }
