@@ -20,6 +20,8 @@
 package org.apache.druid.msq.exec;
 
 import com.google.common.collect.ImmutableMap;
+import org.apache.druid.java.util.common.ISE;
+import org.apache.druid.msq.kernel.StageId;
 import org.apache.druid.msq.kernel.WorkOrder;
 import org.apache.druid.msq.util.MultiStageQueryContext;
 import org.apache.druid.query.QueryContext;
@@ -31,6 +33,25 @@ import java.util.Map;
 
 public class WorkerImplTest
 {
+  @Test
+  public void test_verifyQueryId_matches()
+  {
+    final StageId stageId = new StageId("query", 1);
+
+    Assert.assertSame(stageId, WorkerImpl.verifyQueryId(stageId, "query"));
+  }
+
+  @Test
+  public void test_verifyQueryId_doesNotMatch()
+  {
+    final ISE exception = Assert.assertThrows(
+        ISE.class,
+        () -> WorkerImpl.verifyQueryId(new StageId("query", 1), "other-query")
+    );
+
+    Assert.assertEquals("Unexpected queryId[query], expected queryId[other-query]", exception.getMessage());
+  }
+
   @Test
   public void test_makeWorkOrderToUse_nothingMissing()
   {

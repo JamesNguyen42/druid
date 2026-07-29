@@ -1072,6 +1072,15 @@ public class WorkerImpl implements Worker
     }
   }
 
+  static StageId verifyQueryId(final StageId stageId, final String expectedQueryId)
+  {
+    if (!stageId.getQueryId().equals(expectedQueryId)) {
+      throw new ISE("Unexpected queryId[%s], expected queryId[%s]", stageId.getQueryId(), expectedQueryId);
+    }
+
+    return stageId;
+  }
+
   /**
    * Helper used by {@link #logKernelStatus}.
    */
@@ -1135,7 +1144,8 @@ public class WorkerImpl implements Worker
      */
     public void addKernel(final WorkerStageKernel kernel)
     {
-      final StageId stageId = kernel.getWorkOrder().getStageDefinition().getId();
+      final StageId stageId =
+          verifyQueryId(kernel.getWorkOrder().getStageDefinition().getId(), workerContext.queryId());
 
       if (holderMap.putIfAbsent(stageId.getStageNumber(), new KernelHolder(kernel)) != null) {
         // Already added. Do nothing.
@@ -1151,7 +1161,7 @@ public class WorkerImpl implements Worker
      */
     public void finishProcessing(final StageId stageId)
     {
-      final KernelHolder kernel = holderMap.get(stageId.getStageNumber());
+      final KernelHolder kernel = holderMap.get(verifyQueryId(stageId, workerContext.queryId()).getStageNumber());
 
       if (kernel != null) {
         try {
@@ -1172,7 +1182,7 @@ public class WorkerImpl implements Worker
      */
     public void removeKernel(final StageId stageId)
     {
-      final KernelHolder removed = holderMap.remove(stageId.getStageNumber());
+      final KernelHolder removed = holderMap.remove(verifyQueryId(stageId, workerContext.queryId()).getStageNumber());
 
       if (removed == null) {
         throw new ISE("No kernel for stage[%s]", stageId);
@@ -1226,7 +1236,7 @@ public class WorkerImpl implements Worker
     @Nullable
     public WorkerStageKernel getKernelFor(final StageId stageId)
     {
-      final KernelHolder holder = holderMap.get(stageId.getStageNumber());
+      final KernelHolder holder = holderMap.get(verifyQueryId(stageId, workerContext.queryId()).getStageNumber());
       if (holder != null) {
         return holder.kernel;
       } else {
