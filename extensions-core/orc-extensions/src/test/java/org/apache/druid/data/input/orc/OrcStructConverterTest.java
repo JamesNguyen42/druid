@@ -21,6 +21,7 @@ package org.apache.druid.data.input.orc;
 
 import org.apache.druid.java.util.common.DateTimes;
 import org.apache.druid.java.util.common.StringUtils;
+import org.apache.druid.segment.AutoTypeColumnIndexer;
 import org.apache.hadoop.hive.serde2.io.DateWritable;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
 import org.apache.hadoop.io.BooleanWritable;
@@ -42,6 +43,7 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import javax.annotation.Nullable;
+
 import java.sql.Date;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -175,7 +177,7 @@ public class OrcStructConverterTest
     assertConversion(
         converter,
         TypeDescription.createDate(),
-        DateTimes.utc(dateWritable.get().getTime()),
+        DateTimes.utc(dateWritable.get().getTime()).toString(),
         dateWritable
     );
   }
@@ -185,6 +187,20 @@ public class OrcStructConverterTest
   {
     final OrcStructConverter converter = new OrcStructConverter(false);
     assertConversion(converter, TypeDescription.createDate(), null, null);
+  }
+
+  @Test
+  public void testConvertDateCanBeAutoTyped()
+  {
+    final long date = DateTimes.of("2020-01-01").getMillis();
+    final DateWritable dateWritable = new DateWritable(new Date(date));
+    final OrcStructConverter converter = new OrcStructConverter(false);
+    final Object convertedDate = converter.convertField(TypeDescription.createDate(), dateWritable);
+
+    final AutoTypeColumnIndexer indexer = new AutoTypeColumnIndexer("date", null, null);
+    indexer.processRowValsToUnsortedEncodedKeyComponent(convertedDate, true);
+
+    Assert.assertEquals("2020-01-01T00:00:00.000Z", convertedDate);
   }
 
   @Test

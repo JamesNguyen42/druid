@@ -43,6 +43,7 @@ import org.apache.orc.mapred.OrcTimestamp;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -131,7 +132,7 @@ class OrcStructConverter
       case TIMESTAMP:
         return ((OrcTimestamp) field).getTime();
       case DATE:
-        return DateTimes.utc(((DateWritable) field).get().getTime());
+        return DateTimes.utc(((DateWritable) field).get().getTime()).toString();
       case BINARY:
         byte[] bytes = ((BytesWritable) field).getBytes();
         if (binaryAsString) {
@@ -188,7 +189,7 @@ class OrcStructConverter
     } else if (field instanceof OrcTimestamp) {
       return ((OrcTimestamp) field).getTime();
     } else if (field instanceof DateWritable) {
-      return DateTimes.utc(((DateWritable) field).get().getTime());
+      return DateTimes.utc(((DateWritable) field).get().getTime()).toString();
     } else if (field instanceof BytesWritable) {
       byte[] bytes = ((BytesWritable) field).getBytes();
       if (binaryAsString) {
